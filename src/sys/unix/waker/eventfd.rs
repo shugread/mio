@@ -31,11 +31,11 @@ impl Waker {
 
     pub(crate) fn new_unregistered() -> io::Result<Waker> {
         #[cfg(not(target_os = "espidf"))]
-        let flags = libc::EFD_CLOEXEC | libc::EFD_NONBLOCK;
+        let flags = libc::EFD_CLOEXEC | libc::EFD_NONBLOCK; // 设置非阻塞
         // ESP-IDF is EFD_NONBLOCK by default and errors if you try to pass this flag.
         #[cfg(target_os = "espidf")]
         let flags = 0;
-        let fd = syscall!(eventfd(0, flags))?;
+        let fd = syscall!(eventfd(0, flags))?; // 创建eventfd
         let file = unsafe { File::from_raw_fd(fd) };
         Ok(Waker { fd: file })
     }
@@ -49,6 +49,10 @@ impl Waker {
         #[cfg(target_os = "illumos")]
         self.reset()?;
 
+        // epoll将监听到写入
+        // 向eventfd写入数据, eventfd内部计数器会增加写入的值
+        // 如果, eventfd内部计数器超过u64的最大值, 在阻塞模式下将阻塞
+        // 在非阻塞模式下将返回错误
         let buf: [u8; 8] = 1u64.to_ne_bytes();
         match (&self.fd).write(&buf) {
             Ok(_) => Ok(()),
@@ -70,6 +74,7 @@ impl Waker {
     /// Reset the eventfd object, only need to call this if `wake` fails.
     #[allow(clippy::unused_io_amount)] // Don't care about partial reads.
     fn reset(&self) -> io::Result<()> {
+        // 读取eventfd的值, 将重置eventfd内部计数器
         let mut buf: [u8; 8] = 0u64.to_ne_bytes();
         match (&self.fd).read(&mut buf) {
             Ok(_) => Ok(()),

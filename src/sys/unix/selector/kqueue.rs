@@ -221,12 +221,13 @@ impl Selector {
         // First attempt to accept user space notifications.
         let mut kevent = kevent!(
             0,
-            libc::EVFILT_USER,
+            libc::EVFILT_USER, // 创建用户自定义事件
             libc::EV_ADD | libc::EV_CLEAR | libc::EV_RECEIPT,
             token.0
         );
 
         let kq = self.kq.as_raw_fd();
+        // 注册用户自定义事件到kqueue
         syscall!(kevent(kq, &kevent, 1, &mut kevent, 1, ptr::null())).and_then(|_| {
             if (kevent.flags & libc::EV_ERROR) != 0 && kevent.data != 0 {
                 Err(io::Error::from_raw_os_error(kevent.data as i32))
@@ -252,9 +253,11 @@ impl Selector {
             libc::EV_ADD | libc::EV_RECEIPT,
             token.0
         );
+        // 添加触发标识
         kevent.fflags = libc::NOTE_TRIGGER;
 
         let kq = self.kq.as_raw_fd();
+        // 触发用户自定义事件
         syscall!(kevent(kq, &kevent, 1, &mut kevent, 1, ptr::null())).and_then(|_| {
             if (kevent.flags & libc::EV_ERROR) != 0 && kevent.data != 0 {
                 Err(io::Error::from_raw_os_error(kevent.data as i32))
